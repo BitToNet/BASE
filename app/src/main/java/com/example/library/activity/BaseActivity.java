@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.support.annotation.CallSuper;
+import android.support.annotation.CheckResult;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.StringRes;
 import android.support.v4.app.ActivityCompat;
@@ -19,13 +21,19 @@ import android.widget.Toast;
 
 import com.example.baseapplication.R;
 import com.example.library.application.BaseApplication;
+import com.example.library.utils.TimeUtils;
 import com.example.library.widget.StateView;
+import com.gyf.barlibrary.ImmersionBar;
 
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 import butterknife.ButterKnife;
 import butterknife.Unbinder;
 import cn.bingoogolapple.swipebacklayout.BGASwipeBackHelper;
+import io.reactivex.Observable;
+import io.reactivex.subjects.BehaviorSubject;
 
 /**
  * author : Qiu Long
@@ -33,7 +41,6 @@ import cn.bingoogolapple.swipebacklayout.BGASwipeBackHelper;
  * date   : 2019/6/18  14:41
  * desc   : 基类
  */
-
 @SuppressWarnings("ConstantConditions")
 public abstract class BaseActivity extends AppCompatActivity
         implements BGASwipeBackHelper.Delegate {
@@ -50,6 +57,7 @@ public abstract class BaseActivity extends AppCompatActivity
     private Unbinder unbinder;
 
     private InputMethodManager imm;
+    protected ImmersionBar mImmersionBar;
 
 
     @Override
@@ -139,9 +147,53 @@ public abstract class BaseActivity extends AppCompatActivity
         unbinder = ButterKnife.bind(this);
         context = this;
         activity = this;
+        //初始化沉浸式
+        if (isImmersionBarEnabled()) {
+            initImmersionBar();
+        }
         mStateView = StateView.inject(injectTarget());
     }
 
+    protected void initImmersionBar() {
+        //在BaseActivity里初始化
+        mImmersionBar = ImmersionBar.with(this);
+        mImmersionBar.keyboardEnable(true)//解决软键盘与底部输入框冲突问题，默认为false
+                .init();
+    }
+
+    protected void initImmersionBar(Toolbar toolbar, boolean isDark) {
+        //在BaseActivity里初始化
+        mImmersionBar = ImmersionBar.with(this);
+        mImmersionBar.titleBar(toolbar).keyboardEnable(true);//解决软键盘与底部输入框冲突问题，默认为false
+        if (isDark) {
+            mImmersionBar.statusBarDarkFont(true, 0.2f)// 解决白色状态栏问题
+                    .init();
+        } else {
+            mImmersionBar.init();
+        }
+    }
+
+    protected void initImmersionBar(View statusBarView, boolean isDark) {
+        //在BaseActivity里初始化
+        mImmersionBar = ImmersionBar.with(this);
+        mImmersionBar.statusBarView(statusBarView).keyboardEnable(true);//解决软键盘与底部输入框冲突问题，默认为false
+        if (isDark) {
+            mImmersionBar.statusBarDarkFont(true, 0.2f)// 解决白色状态栏问题
+                    .init();
+        } else {
+            mImmersionBar.init();
+        }
+    }
+
+    /**
+     * 是否可以使用沉浸式
+     * Is immersion bar enabled boolean.
+     *
+     * @return the boolean
+     */
+    protected boolean isImmersionBarEnabled() {
+        return true;
+    }
 
     /**
      * 初始化 Toolbar
@@ -157,12 +209,7 @@ public abstract class BaseActivity extends AppCompatActivity
         toolbar.setContentInsetEndWithActions(0);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(homeAsUpEnabled);
-        toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                onBackPressed();
-            }
-        });
+        toolbar.setNavigationOnClickListener(view -> onBackPressed());
     }
 
     /**
@@ -180,12 +227,7 @@ public abstract class BaseActivity extends AppCompatActivity
         tvTitle.setText(title);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(homeAsUpEnabled);
-        toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                onBackPressed();
-            }
-        });
+        toolbar.setNavigationOnClickListener(view -> onBackPressed());
     }
 
     /**
@@ -364,7 +406,7 @@ public abstract class BaseActivity extends AppCompatActivity
      * @param key
      * @param value
      * @param isfinish
-     * @param tag
+     * @param tag -1：startActivity 其他：startActivityForResult
      * @param flags
      */
     private void showActivity(Class<?> pClass, Bundle bundle, String key, Serializable value,
@@ -413,7 +455,7 @@ public abstract class BaseActivity extends AppCompatActivity
             mToast = Toast.makeText(getApplicationContext(), content, Toast.LENGTH_SHORT);
         }
         mToast.setText(content);
-        if (temp - time < 1000) {
+        if (temp - time < TimeUtils.ONE_SECOND) {
             mToast.setDuration(Toast.LENGTH_LONG);
         }
         time = temp;
@@ -434,7 +476,7 @@ public abstract class BaseActivity extends AppCompatActivity
             mToast = Toast.makeText(getApplicationContext(), getString(resId), Toast.LENGTH_SHORT);
         }
         mToast.setText(getString(resId));
-        if (temp - time < 1000) {
+        if (temp - time < TimeUtils.ONE_SECOND) {
             mToast.setDuration(Toast.LENGTH_LONG);
         }
         time = temp;
@@ -442,7 +484,7 @@ public abstract class BaseActivity extends AppCompatActivity
     }
 
     public void doExitApp() {
-        if ((System.currentTimeMillis() - exitTime) > 2000) {
+        if ((System.currentTimeMillis() - exitTime) > TimeUtils.ONE_SECOND * 2) {
             showToast("再按一次退出！");
             exitTime = System.currentTimeMillis();
         } else {
@@ -490,6 +532,9 @@ public abstract class BaseActivity extends AppCompatActivity
         super.onDestroy();
         unbinder.unbind();
         this.imm = null;
+        if (mImmersionBar != null) {
+            mImmersionBar.destroy();  //在BaseActivity里销毁
+        }
     }
 
     @Override
@@ -503,3 +548,5 @@ public abstract class BaseActivity extends AppCompatActivity
         mSwipeBackHelper.backward();
     }
 }
+
+
